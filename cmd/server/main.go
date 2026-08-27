@@ -47,6 +47,7 @@ func main() {
 	mux.HandleFunc("/api/v1/orders", s.ordersRoute)
 	mux.HandleFunc("/api/v1/auth/login", s.login)
 	mux.HandleFunc("/api/v1/auth/refresh", s.refresh)
+	mux.HandleFunc("/api/v1/admin/", s.adminRoute)
 	mux.HandleFunc("/api/v1/users/", s.userRoute)
 	addr := env("HTTP_ADDR", ":8080")
 	log.Printf("storemesh BFF listening on %s", addr)
@@ -94,6 +95,102 @@ func (s *server) userRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	response, err := s.users.GetUser(grpcContext(r), &userv1.GetUserRequest{Id: id})
 	s.write(w, response, err)
+}
+
+// adminRoute exposes the User Service management APIs under an explicit BFF
+// namespace. User Service remains the authorization authority and receives
+// the original bearer token through grpcContext.
+func (s *server) adminRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") == "" {
+		writeError(w, status.Error(codes.Unauthenticated, "authorization is required"))
+		return
+	}
+
+	ctx := grpcContext(r)
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/")
+	if path == "roles" {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		response, err := s.users.ListRoles(ctx, &userv1.ListRolesRequest{})
+		s.write(w, response, err)
+		return
+	}
+
+	if !strings.HasPrefix(path, "users") {
+		http.NotFound(w, r)
+		return
+	}
+	path = strings.TrimPrefix(path, "users")
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		request := &userv1.ListUsersRequest{Status: r.URL.Query().Get("status")}
+		if value := r.URL.Query().Get("page"); value != "" {
+			if _, err := fmt.Sscan(value, &request.Page); err != nil {
+				writeError(w, status.Error(codes.InvalidArgument, "page must be an integer"))
+				return
+			}
+		}
+		if value := r.URL.Query().Get("per_page"); value != "" {
+			if _, err := fmt.Sscan(value, &request.PerPage); err != nil {
+				writeError(w, status.Error(codes.InvalidArgument, "per_page must be an integer"))
+				return
+			}
+		}
+		response, err := s.users.ListUsers(ctx, request)
+		s.write(w, response, err)
+		return
+	}
+
+	parts := strings.Split(path, "/")
+	userID := parts[0]
+	if userID == "" {
+		http.Error(w, "user ID is required", http.StatusBadRequest)
+		return
+	}
+	if len(parts) == 1 {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		response, err := s.users.DeleteUser(ctx, &userv1.DeleteUserRequest{Id: userID})
+		s.write(w, response, err)
+		return
+	}
+	if parts[1] != "roles" {
+		http.NotFound(w, r)
+		return
+	}
+	if len(parts) == 2 {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		response, err := s.users.GetUserRoles(ctx, &userv1.GetUserRolesRequest{UserId: userID})
+		s.write(w, response, err)
+		return
+	}
+	if len(parts) != 3 || parts[2] == "" {
+		http.NotFound(w, r)
+		return
+	}
+	request := &userv1.AssignRoleRequest{UserId: userID, Role: parts[2]}
+	if r.Method == http.MethodPut {
+		response, err := s.users.AssignRole(ctx, request)
+		s.write(w, response, err)
+		return
+	}
+	if r.Method == http.MethodDelete {
+		response, err := s.users.RevokeRole(ctx, &userv1.RevokeRoleRequest{UserId: userID, Role: parts[2]})
+		s.write(w, response, err)
+		return
+	}
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }
 
 func (s *server) health(w http.ResponseWriter, _ *http.Request) {

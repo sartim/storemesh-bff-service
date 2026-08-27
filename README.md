@@ -25,10 +25,16 @@ includes:
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
 - `GET /api/v1/users/{id}`
+- `GET /api/v1/admin/users`
+- `DELETE /api/v1/admin/users/{id}`
+- `GET /api/v1/admin/users/{id}/roles`
+- `PUT /api/v1/admin/users/{id}/roles/{role}`
+- `DELETE /api/v1/admin/users/{id}/roles/{role}`
+- `GET /api/v1/admin/roles`
 
 Incoming `Authorization` is forwarded as gRPC metadata. Login and refresh are
-delegated to User Service; role-aware edge policy will be added as the
-frontend journeys are implemented.
+delegated to User Service. Admin routes require an Authorization header at the
+edge and User Service performs the final token and admin-role authorization.
 
 The BFF allows the configured `CORS_ALLOWED_ORIGIN` (default
 `http://localhost:3000`) and maps gRPC failures to consistent JSON errors.
