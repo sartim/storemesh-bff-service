@@ -20,6 +20,7 @@ includes:
 - `GET /api/v1/products`
 - `GET /api/v1/products/{id}`
 - `POST /api/v1/orders`
+- `GET /api/v1/orders?customer_id={id}&page_size={n}&page_token={token}&status={status}`
 - `GET /api/v1/orders/{id}`
 - `POST /api/v1/orders/{id}:cancel`
 - `POST /api/v1/auth/login`
@@ -35,6 +36,9 @@ includes:
 Incoming `Authorization` is forwarded as gRPC metadata. Login and refresh are
 delegated to User Service. Admin routes require an Authorization header at the
 edge and User Service performs the final token and admin-role authorization.
+Order listing supports customer and status filters with page-token pagination;
+the caller is responsible for selecting an authorized customer scope until
+the order authorization interceptor is introduced.
 
 The BFF allows the configured `CORS_ALLOWED_ORIGIN` (default
 `http://localhost:3000`) and maps gRPC failures to consistent JSON errors.

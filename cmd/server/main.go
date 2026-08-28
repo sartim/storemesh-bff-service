@@ -236,6 +236,16 @@ func (s *server) ordersRoute(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":cancel"):
 		response, err := s.orders.CancelOrder(ctx, &orderv1.CancelOrderRequest{OrderId: strings.TrimSuffix(id, ":cancel")})
 		s.write(w, response, err)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/orders":
+		request := &orderv1.ListOrdersRequest{CustomerId: r.URL.Query().Get("customer_id"), PageToken: r.URL.Query().Get("page_token"), Status: orderStatus(r.URL.Query().Get("status"))}
+		if value := r.URL.Query().Get("page_size"); value != "" {
+			if _, err := fmt.Sscan(value, &request.PageSize); err != nil {
+				writeError(w, status.Error(codes.InvalidArgument, "page_size must be an integer"))
+				return
+			}
+		}
+		response, err := s.orders.ListOrders(ctx, request)
+		s.write(w, response, err)
 	case r.Method == http.MethodGet && id != "":
 		response, err := s.orders.GetOrder(ctx, &orderv1.GetOrderRequest{OrderId: id})
 		s.write(w, response, err)
@@ -305,7 +315,7 @@ func cors(next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Origin")
 		}
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -350,6 +360,19 @@ func productStatus(value string) productv1.ProductStatus {
 		return productv1.ProductStatus_PRODUCT_STATUS_ARCHIVED
 	default:
 		return productv1.ProductStatus_PRODUCT_STATUS_UNSPECIFIED
+	}
+}
+
+func orderStatus(value string) orderv1.OrderStatus {
+	switch strings.ToLower(value) {
+	case "pending":
+		return orderv1.OrderStatus_ORDER_STATUS_PENDING
+	case "confirmed":
+		return orderv1.OrderStatus_ORDER_STATUS_CONFIRMED
+	case "cancelled":
+		return orderv1.OrderStatus_ORDER_STATUS_CANCELLED
+	default:
+		return orderv1.OrderStatus_ORDER_STATUS_UNSPECIFIED
 	}
 }
 
