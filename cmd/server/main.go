@@ -108,6 +108,35 @@ func (s *server) adminRoute(w http.ResponseWriter, r *http.Request) {
 
 	ctx := grpcContext(r)
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/")
+	if path == "products" || strings.HasPrefix(path, "products/") {
+		if r.Method == http.MethodGet && path == "products" {
+			response, err := s.products.ListProducts(ctx, &productv1.ListProductsRequest{PageSize: 100})
+			s.write(w, response, err)
+			return
+		}
+		if r.Method == http.MethodPost && path == "products" {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				http.Error(w, "invalid product", http.StatusBadRequest)
+				return
+			}
+			product := &productv1.Product{}
+			if err := protojson.Unmarshal(body, product); err != nil {
+				http.Error(w, "invalid product", http.StatusBadRequest)
+				return
+			}
+			response, err := s.products.CreateProduct(ctx, &productv1.CreateProductRequest{Product: product})
+			s.write(w, response, err)
+			return
+		}
+		if r.Method == http.MethodDelete && strings.HasPrefix(path, "products/") {
+			response, err := s.products.ArchiveProduct(ctx, &productv1.ArchiveProductRequest{Id: strings.TrimPrefix(path, "products/")})
+			s.write(w, response, err)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	if path == "roles" {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
