@@ -378,6 +378,9 @@ func dial(address string) *grpc.ClientConn {
 }
 
 func pathID(path, prefix string) string {
+	if !strings.HasPrefix(path, prefix) {
+		return ""
+	}
 	return strings.TrimPrefix(path, prefix)
 }
 
