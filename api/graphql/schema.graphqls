@@ -1,5 +1,5 @@
 """Versioned client-composition contract for StoreMesh."""
-schema { query: Query }
+schema { query: Query, mutation: Mutation }
 
 type Query {
   """Catalog data combined with the fields needed by storefront screens."""
@@ -8,6 +8,13 @@ type Query {
   cart: Cart!
   """The authenticated customer's paginated order history."""
   orders(pageSize: Int, pageToken: String, status: OrderStatus): OrderConnection!
+}
+
+type Mutation {
+  """Replace the authenticated customer's persisted cart."""
+  updateCart(lines: [CartLineInput!]!): Cart!
+  """Create an order from the authenticated customer's cart lines."""
+  createOrder(lines: [OrderLineInput!]!, idempotencyKey: String!): Order!
 }
 
 type ProductConnection {
@@ -33,6 +40,16 @@ type Cart {
 }
 
 type CartLine {
+  productId: ID!
+  quantity: Int!
+}
+
+input CartLineInput {
+  productId: ID!
+  quantity: Int!
+}
+
+input OrderLineInput {
   productId: ID!
   quantity: Int!
 }

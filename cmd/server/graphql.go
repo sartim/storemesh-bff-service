@@ -66,6 +66,12 @@ func buildProductGraphQLSchema() graphql.Schema {
 	orderConnectionType := graphql.NewObject(graphql.ObjectConfig{Name: "OrderConnection", Fields: graphql.Fields{
 		"orders": {Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(orderType)))}, "nextPageToken": {Type: graphql.String},
 	}})
+	cartLineInputType := graphql.NewInputObject(graphql.InputObjectConfig{Name: "CartLineInput", Fields: graphql.InputObjectConfigFieldMap{
+		"productId": {Type: graphql.NewNonNull(graphql.String)}, "quantity": {Type: graphql.NewNonNull(graphql.Int)},
+	}})
+	orderLineInputType := graphql.NewInputObject(graphql.InputObjectConfig{Name: "OrderLineInput", Fields: graphql.InputObjectConfigFieldMap{
+		"productId": {Type: graphql.NewNonNull(graphql.String)}, "quantity": {Type: graphql.NewNonNull(graphql.Int)},
+	}})
 	connectionType := graphql.NewObject(graphql.ObjectConfig{
 		Name: "ProductConnection",
 		Fields: graphql.Fields{
@@ -91,7 +97,13 @@ func buildProductGraphQLSchema() graphql.Schema {
 			}, Resolve: resolveOrders},
 		},
 	})
-	schema, err := graphql.NewSchema(graphql.SchemaConfig{Query: root})
+	mutation := graphql.NewObject(graphql.ObjectConfig{Name: "Mutation", Fields: graphql.Fields{
+		"updateCart": {Type: cartType, Args: graphql.FieldConfigArgument{"lines": {Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(cartLineInputType)))}}, Resolve: resolveUpdateCart},
+		"createOrder": {Type: orderType, Args: graphql.FieldConfigArgument{
+			"lines": {Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(orderLineInputType)))}, "idempotencyKey": {Type: graphql.NewNonNull(graphql.String)},
+		}, Resolve: resolveCreateOrder},
+	}})
+	schema, err := graphql.NewSchema(graphql.SchemaConfig{Query: root, Mutation: mutation})
 	if err != nil {
 		panic(err)
 	}
@@ -160,6 +172,100 @@ func resolveOrders(params graphql.ResolveParams) (interface{}, error) {
 		orders = append(orders, map[string]interface{}{"id": order.GetOrderId(), "customerId": order.GetCustomerId(), "status": graphOrderStatus(order.GetStatus()), "totalMinor": order.GetTotalMinor(), "currency": order.GetCurrency(), "createdAt": createdAt})
 	}
 	return map[string]interface{}{"orders": orders, "nextPageToken": response.GetNextPageToken()}, nil
+}
+
+func resolveUpdateCart(params graphql.ResolveParams) (interface{}, error) {
+	s, customerID, err := graphQLAuth(params)
+	if err != nil {
+		return nil, err
+	}
+	lines, err := graphQLCartLines(params.Args["lines"])
+	if err != nil {
+		return nil, err
+	}
+	response, err := s.carts.UpsertCart(params.Context, &orderv1.UpsertCartRequest{Cart: &orderv1.Cart{CustomerId: customerID, Lines: lines}})
+	if err != nil {
+		return nil, err
+	}
+	return graphQLCart(response.GetCart()), nil
+}
+
+func resolveCreateOrder(params graphql.ResolveParams) (interface{}, error) {
+	s, customerID, err := graphQLAuth(params)
+	if err != nil {
+		return nil, err
+	}
+	lines, err := graphQLOrderLines(params.Args["lines"])
+	if err != nil {
+		return nil, err
+	}
+	key := stringArgument(params.Args, "idempotencyKey")
+	if key == "" {
+		return nil, status.Error(codes.InvalidArgument, "idempotencyKey is required")
+	}
+	response, err := s.orders.CreateOrder(params.Context, &orderv1.CreateOrderRequest{Order: &orderv1.Order{CustomerId: customerID, Lines: lines}, IdempotencyKey: key})
+	if err != nil {
+		return nil, err
+	}
+	return graphQLOrder(response.GetOrder()), nil
+}
+
+func graphQLCartLines(value interface{}) ([]*orderv1.CartLine, error) {
+	items, ok := value.([]interface{})
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "lines are required")
+	}
+	lines := make([]*orderv1.CartLine, 0, len(items))
+	for _, item := range items {
+		fields, ok := item.(map[string]interface{})
+		if !ok {
+			return nil, status.Error(codes.InvalidArgument, "invalid cart line")
+		}
+		productID := stringArgument(fields, "productId")
+		quantity, ok := fields["quantity"].(int)
+		if productID == "" || !ok || quantity <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "cart line productId and positive quantity are required")
+		}
+		lines = append(lines, &orderv1.CartLine{ProductId: productID, Quantity: int64(quantity)})
+	}
+	return lines, nil
+}
+
+func graphQLOrderLines(value interface{}) ([]*orderv1.OrderLine, error) {
+	items, ok := value.([]interface{})
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "lines are required")
+	}
+	lines := make([]*orderv1.OrderLine, 0, len(items))
+	for _, item := range items {
+		fields, ok := item.(map[string]interface{})
+		if !ok {
+			return nil, status.Error(codes.InvalidArgument, "invalid order line")
+		}
+		productID := stringArgument(fields, "productId")
+		quantity, ok := fields["quantity"].(int)
+		if productID == "" || !ok || quantity <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "order line productId and positive quantity are required")
+		}
+		lines = append(lines, &orderv1.OrderLine{ProductId: productID, Quantity: int64(quantity)})
+	}
+	return lines, nil
+}
+
+func graphQLCart(cart *orderv1.Cart) map[string]interface{} {
+	lines := make([]map[string]interface{}, 0, len(cart.GetLines()))
+	for _, line := range cart.GetLines() {
+		lines = append(lines, map[string]interface{}{"productId": line.GetProductId(), "quantity": line.GetQuantity()})
+	}
+	return map[string]interface{}{"customerId": cart.GetCustomerId(), "lines": lines}
+}
+
+func graphQLOrder(order *orderv1.Order) map[string]interface{} {
+	createdAt := ""
+	if order.GetCreatedAt() != nil {
+		createdAt = order.GetCreatedAt().AsTime().Format(time.RFC3339)
+	}
+	return map[string]interface{}{"id": order.GetOrderId(), "customerId": order.GetCustomerId(), "status": graphOrderStatus(order.GetStatus()), "totalMinor": order.GetTotalMinor(), "currency": order.GetCurrency(), "createdAt": createdAt}
 }
 
 func graphQLAuth(params graphql.ResolveParams) (*server, string, error) {

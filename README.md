@@ -66,13 +66,14 @@ the existing REST routes, keeping current clients compatible while allowing
 each client to request only the fields needed by a screen.
 
 The versioned composition contract is maintained at
-`api/graphql/schema.graphqls`. The first live resolver is the read-only
-`products` query; cart and customer-order fields are the next composition
-slice and will combine domain responses once their resolver tests are ready.
-Mutations continue through REST until GraphQL mutation authorization,
-idempotency, and error contracts are covered by resolver tests. Web and mobile
-clients may consume GraphQL for composed views; they should continue using
-REST for login, health, uploads, and simple resource mutations.
+`api/graphql/schema.graphqls`. The live read resolvers are `products`, `cart`,
+and `orders`. Cart and order queries are scoped to the authenticated token
+subject and support the same pagination/status filters as the REST API.
+GraphQL mutations now include `updateCart` and `createOrder`. Both enforce the
+authenticated customer subject; `createOrder` requires a caller-provided
+idempotency key. Web and mobile clients may consume GraphQL for these composed
+views while continuing to use REST for login, health, uploads, and simple
+resource mutations.
 
 ## Keycloak validation
 
