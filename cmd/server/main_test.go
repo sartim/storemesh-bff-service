@@ -2,8 +2,31 @@ package main
 
 import (
 	"encoding/base64"
+	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/graphql-go/graphql"
 )
+
+func TestProductGraphQLSchema(t *testing.T) {
+	result := graphql.Do(graphql.Params{Schema: productGraphQLSchema, RequestString: `{ __typename }`})
+	if len(result.Errors) != 0 {
+		t.Fatalf("schema execution returned errors: %v", result.Errors)
+	}
+	if result.Data.(map[string]interface{})["__typename"] != "Query" {
+		t.Fatalf("unexpected root type: %#v", result.Data)
+	}
+}
+
+func TestGraphQLRejectsInvalidRequest(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest("POST", "/api/v1/graphql", strings.NewReader("not-json"))
+	(&server{}).graphQL(recorder, request)
+	if recorder.Code != 400 {
+		t.Fatalf("status = %d, want 400", recorder.Code)
+	}
+}
 
 func TestPathID(t *testing.T) {
 	tests := []struct {

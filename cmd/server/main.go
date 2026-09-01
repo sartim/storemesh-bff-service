@@ -54,6 +54,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.health)
 	mux.HandleFunc("/api/v1/products", s.productsRoute)
+	mux.HandleFunc("/api/v1/graphql", s.authenticated(s.graphQL))
 	mux.HandleFunc("/api/v1/orders", s.authenticated(s.ordersRoute))
 	mux.HandleFunc("/api/v1/cart", s.authenticated(s.cartRoute))
 	mux.HandleFunc("/api/v1/auth/login", s.login)

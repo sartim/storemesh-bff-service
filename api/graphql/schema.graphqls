@@ -4,10 +4,6 @@ schema { query: Query }
 type Query {
   """Catalog data combined with the fields needed by storefront screens."""
   products(pageSize: Int, pageToken: String, status: ProductStatus): ProductConnection!
-  """The authenticated customer's persisted cart with product summaries."""
-  cart: Cart!
-  """The authenticated customer's order history."""
-  orders(pageSize: Int, pageToken: String, status: OrderStatus): OrderConnection!
 }
 
 type ProductConnection {
@@ -26,33 +22,3 @@ type Product {
 }
 
 enum ProductStatus { UNSPECIFIED ACTIVE ARCHIVED }
-
-type Cart {
-  customerId: ID!
-  lines: [CartLine!]!
-  subtotalMinor: Int!
-  currency: String!
-}
-
-type CartLine {
-  product: Product
-  productId: ID!
-  quantity: Int!
-  lineTotalMinor: Int!
-}
-
-type OrderConnection {
-  orders: [Order!]!
-  nextPageToken: String
-}
-
-type Order {
-  id: ID!
-  customerId: ID!
-  status: OrderStatus!
-  totalMinor: Int!
-  currency: String!
-  createdAt: String!
-}
-
-enum OrderStatus { UNSPECIFIED PENDING CONFIRMED CANCELLED }
