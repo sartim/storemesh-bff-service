@@ -1,8 +1,9 @@
 # StoreMesh BFF
 
-The BFF is the client-facing REST edge for StoreMesh. It keeps the public
-route namespace stable while using the domain services' generated gRPC clients
-internally.
+The BFF is the client-facing Go edge for StoreMesh. It exposes REST/JSON for
+resource and operational routes and GraphQL for composed client views. Both
+surfaces use the domain services' generated gRPC clients internally; browsers
+and mobile clients never call internal gRPC services directly.
 
 ## Local run
 
@@ -50,6 +51,19 @@ configuration is enabled.
 
 The BFF allows the configured `CORS_ALLOWED_ORIGIN` (default
 `http://localhost:3000`) and maps gRPC failures to consistent JSON errors.
+
+## API shape
+
+REST remains the resource-oriented surface for authentication, health,
+catalog, carts, orders, and administration. GraphQL is the composition
+surface for views that combine multiple domains, such as an order summary with
+product, inventory, and customer information. GraphQL resolvers must call the
+generated gRPC clients through application services; they must not duplicate
+domain rules or access another service's database.
+
+The GraphQL endpoint and schema will be introduced incrementally alongside
+the existing REST routes, keeping current clients compatible while allowing
+each client to request only the fields needed by a screen.
 
 ## Keycloak validation
 
