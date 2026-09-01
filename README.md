@@ -45,8 +45,8 @@ the order authorization interceptor is introduced.
 Cart routes require the supplied customer ID to match the bearer token `sub`
 claim and persist through the Order Service cart store. The Order Service
 uses PostgreSQL when `DATABASE_URL` is configured and in-memory storage for
-local no-database mode. Full JWT signature enforcement remains part of the
-shared authorization interceptor work.
+local no-database mode. Strict Keycloak validation applies when the OIDC
+configuration is enabled.
 
 The BFF allows the configured `CORS_ALLOWED_ORIGIN` (default
 `http://localhost:3000`) and maps gRPC failures to consistent JSON errors.
@@ -59,6 +59,9 @@ signatures, issuer, audience, expiry, and a small clock-skew allowance. If
 these settings are omitted, local compatibility mode retains the existing
 development token handling; shared environments must set them and should not
 run in compatibility mode.
+
+Strict validation protects orders, carts, user, and admin routes. `OPTIONS`
+preflight requests remain public for browser CORS negotiation.
 
 Build the image from the StoreMesh workspace root so local service module
 replacements are available:

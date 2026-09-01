@@ -54,16 +54,37 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.health)
 	mux.HandleFunc("/api/v1/products", s.productsRoute)
-	mux.HandleFunc("/api/v1/orders", s.ordersRoute)
-	mux.HandleFunc("/api/v1/cart", s.cartRoute)
+	mux.HandleFunc("/api/v1/orders", s.authenticated(s.ordersRoute))
+	mux.HandleFunc("/api/v1/cart", s.authenticated(s.cartRoute))
 	mux.HandleFunc("/api/v1/auth/login", s.login)
 	mux.HandleFunc("/api/v1/auth/refresh", s.refresh)
-	mux.HandleFunc("/api/v1/admin/", s.adminRoute)
-	mux.HandleFunc("/api/v1/users/", s.userRoute)
+	mux.HandleFunc("/api/v1/admin/", s.authenticated(s.adminRoute))
+	mux.HandleFunc("/api/v1/users/", s.authenticated(s.userRoute))
 	addr := env("HTTP_ADDR", ":8080")
 	log.Printf("storemesh BFF listening on %s", addr)
 	server := &http.Server{Addr: addr, Handler: cors(mux), ReadHeaderTimeout: 5 * time.Second}
 	log.Fatal(server.ListenAndServe())
+}
+
+func (s *server) authenticated(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			next(w, r)
+			return
+		}
+		header := r.Header.Get("Authorization")
+		if !strings.HasPrefix(header, "Bearer ") || strings.TrimSpace(strings.TrimPrefix(header, "Bearer ")) == "" {
+			writeError(w, status.Error(codes.Unauthenticated, "authorization is required"))
+			return
+		}
+		if s.oidc != nil {
+			if _, err := s.oidc.Validate(strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))); err != nil {
+				writeError(w, status.Error(codes.Unauthenticated, "invalid access token"))
+				return
+			}
+		}
+		next(w, r)
+	}
 }
 
 func (s *server) login(w http.ResponseWriter, r *http.Request) {
