@@ -65,6 +65,14 @@ The GraphQL endpoint and schema will be introduced incrementally alongside
 the existing REST routes, keeping current clients compatible while allowing
 each client to request only the fields needed by a screen.
 
+The versioned composition contract is maintained at
+`api/graphql/schema.graphqls`. Its initial scope is read-only product, cart,
+and customer-order views. Mutations continue through REST until GraphQL
+mutation authorization, idempotency, and error contracts are covered by
+resolver tests. Web and mobile clients may consume GraphQL for composed views;
+they should continue using REST for login, health, uploads, and simple
+resource mutations.
+
 ## Keycloak validation
 
 Set both `KEYCLOAK_ISSUER` and `KEYCLOAK_AUDIENCE` to enable strict OIDC
