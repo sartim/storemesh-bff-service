@@ -99,6 +99,7 @@ func buildProductGraphQLSchema() graphql.Schema {
 	})
 	mutation := graphql.NewObject(graphql.ObjectConfig{Name: "Mutation", Fields: graphql.Fields{
 		"updateCart": {Type: cartType, Args: graphql.FieldConfigArgument{"lines": {Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(cartLineInputType)))}}, Resolve: resolveUpdateCart},
+		"clearCart":  {Type: cartType, Resolve: resolveClearCart},
 		"createOrder": {Type: orderType, Args: graphql.FieldConfigArgument{
 			"lines": {Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(orderLineInputType)))}, "idempotencyKey": {Type: graphql.NewNonNull(graphql.String)},
 		}, Resolve: resolveCreateOrder},
@@ -208,6 +209,14 @@ func resolveCreateOrder(params graphql.ResolveParams) (interface{}, error) {
 		return nil, err
 	}
 	return graphQLOrder(response.GetOrder()), nil
+}
+
+func resolveClearCart(params graphql.ResolveParams) (interface{}, error) {
+	s, customerID, err := graphQLAuth(params)
+	if err != nil { return nil, err }
+	response, err := s.carts.ClearCart(params.Context, &orderv1.ClearCartRequest{CustomerId: customerID})
+	if err != nil { return nil, err }
+	return graphQLCart(response.GetCart()), nil
 }
 
 func graphQLCartLines(value interface{}) ([]*orderv1.CartLine, error) {

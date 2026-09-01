@@ -13,6 +13,8 @@ type Query {
 type Mutation {
   """Replace the authenticated customer's persisted cart."""
   updateCart(lines: [CartLineInput!]!): Cart!
+  """Clear the authenticated customer's persisted cart."""
+  clearCart: Cart!
   """Create an order from the authenticated customer's cart lines."""
   createOrder(lines: [OrderLineInput!]!, idempotencyKey: String!): Order!
 }
