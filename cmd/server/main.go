@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -25,6 +27,7 @@ import (
 type server struct {
 	products productv1.ProductCatalogServiceClient
 	orders   orderv1.OrderServiceClient
+	carts    orderv1.CartServiceClient
 	users    userv1.UserServiceClient
 }
 
@@ -39,12 +42,14 @@ func main() {
 	s := &server{
 		products: productv1.NewProductCatalogServiceClient(productConn),
 		orders:   orderv1.NewOrderServiceClient(orderConn),
+		carts:    orderv1.NewCartServiceClient(orderConn),
 		users:    userv1.NewUserServiceClient(userConn),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.health)
 	mux.HandleFunc("/api/v1/products", s.productsRoute)
 	mux.HandleFunc("/api/v1/orders", s.ordersRoute)
+	mux.HandleFunc("/api/v1/cart", s.cartRoute)
 	mux.HandleFunc("/api/v1/auth/login", s.login)
 	mux.HandleFunc("/api/v1/auth/refresh", s.refresh)
 	mux.HandleFunc("/api/v1/admin/", s.adminRoute)
@@ -295,6 +300,69 @@ func (s *server) ordersRoute(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *server) cartRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Header.Get("Authorization") == "" {
+		writeError(w, status.Error(codes.Unauthenticated, "authorization is required"))
+		return
+	}
+	customerID := r.URL.Query().Get("customer_id")
+	if customerID == "" {
+		writeError(w, status.Error(codes.InvalidArgument, "customer_id is required"))
+		return
+	}
+	if subject := bearerSubject(r.Header.Get("Authorization")); subject == "" || subject != customerID {
+		writeError(w, status.Error(codes.PermissionDenied, "customer_id must match the authenticated user"))
+		return
+	}
+	ctx := grpcContext(r)
+	switch r.Method {
+	case http.MethodGet:
+		response, err := s.carts.GetCart(ctx, &orderv1.GetCartRequest{CustomerId: customerID})
+		s.write(w, response, err)
+	case http.MethodPut:
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "invalid cart", http.StatusBadRequest)
+			return
+		}
+		cart := &orderv1.Cart{}
+		if err := protojson.Unmarshal(body, cart); err != nil {
+			http.Error(w, "invalid cart", http.StatusBadRequest)
+			return
+		}
+		cart.CustomerId = customerID
+		response, err := s.carts.UpsertCart(ctx, &orderv1.UpsertCartRequest{Cart: cart})
+		s.write(w, response, err)
+	case http.MethodDelete:
+		response, err := s.carts.ClearCart(ctx, &orderv1.ClearCartRequest{CustomerId: customerID})
+		s.write(w, response, err)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func bearerSubject(header string) string {
+	parts := strings.Split(strings.TrimPrefix(header, "Bearer "), ".")
+	if len(parts) != 3 {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var claims struct {
+		Subject string `json:"sub"`
+	}
+	if json.Unmarshal(payload, &claims) != nil {
+		return ""
+	}
+	return claims.Subject
 }
 
 func (s *server) write(w http.ResponseWriter, message proto.Message, err error) {

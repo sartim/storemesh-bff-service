@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"encoding/base64"
+	"testing"
+)
 
 func TestPathID(t *testing.T) {
 	tests := []struct {
@@ -19,5 +22,16 @@ func TestPathID(t *testing.T) {
 				t.Fatalf("pathID(%q, %q) = %q, want %q", tt.path, tt.prefix, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBearerSubject(t *testing.T) {
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"customer-123"}`))
+	token := "header." + payload + ".signature"
+	if got := bearerSubject("Bearer " + token); got != "customer-123" {
+		t.Fatalf("bearerSubject() = %q", got)
+	}
+	if got := bearerSubject("Bearer invalid"); got != "" {
+		t.Fatalf("invalid token subject = %q", got)
 	}
 }
