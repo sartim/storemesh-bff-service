@@ -37,6 +37,10 @@ includes:
 - `PUT /api/v1/cart?customer_id={id}`
 - `DELETE /api/v1/cart?customer_id={id}`
 
+GraphQL is available at `POST /api/v1/graphql` for authenticated client
+composition. The live schema supports `products`, `cart`, and `orders` reads,
+plus `updateCart`, `clearCart`, and idempotent `createOrder` mutations.
+
 Incoming `Authorization` is forwarded as gRPC metadata. Login and refresh are
 delegated to User Service. Admin routes require an Authorization header at the
 edge and User Service performs the final token and admin-role authorization.
