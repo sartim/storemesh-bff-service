@@ -29,6 +29,7 @@ type server struct {
 	orders   orderv1.OrderServiceClient
 	carts    orderv1.CartServiceClient
 	users    userv1.UserServiceClient
+	oidc     *oidcValidator
 }
 
 func main() {
@@ -39,11 +40,16 @@ func main() {
 	userConn := dial(env("USER_SERVICE_ADDR", "storemesh-user-service:50051"))
 	defer userConn.Close()
 
+	oidc, err := newOIDCValidator(os.Getenv("KEYCLOAK_ISSUER"), os.Getenv("KEYCLOAK_AUDIENCE"))
+	if err != nil {
+		log.Fatalf("configure Keycloak OIDC: %v", err)
+	}
 	s := &server{
 		products: productv1.NewProductCatalogServiceClient(productConn),
 		orders:   orderv1.NewOrderServiceClient(orderConn),
 		carts:    orderv1.NewCartServiceClient(orderConn),
 		users:    userv1.NewUserServiceClient(userConn),
+		oidc:     oidc,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.health)
@@ -316,7 +322,7 @@ func (s *server) cartRoute(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status.Error(codes.InvalidArgument, "customer_id is required"))
 		return
 	}
-	if subject := bearerSubject(r.Header.Get("Authorization")); subject == "" || subject != customerID {
+	if subject := s.customerSubject(r.Header.Get("Authorization")); subject == "" || subject != customerID {
 		writeError(w, status.Error(codes.PermissionDenied, "customer_id must match the authenticated user"))
 		return
 	}
@@ -345,6 +351,18 @@ func (s *server) cartRoute(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *server) customerSubject(header string) string {
+	raw := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+	if s.oidc != nil {
+		claims, err := s.oidc.Validate(raw)
+		if err != nil {
+			return ""
+		}
+		return claims.Subject
+	}
+	return bearerSubject(header)
 }
 
 func bearerSubject(header string) string {

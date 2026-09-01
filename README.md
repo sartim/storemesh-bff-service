@@ -51,6 +51,15 @@ shared authorization interceptor work.
 The BFF allows the configured `CORS_ALLOWED_ORIGIN` (default
 `http://localhost:3000`) and maps gRPC failures to consistent JSON errors.
 
+## Keycloak validation
+
+Set both `KEYCLOAK_ISSUER` and `KEYCLOAK_AUDIENCE` to enable strict OIDC
+validation. The BFF discovers the realm JWKS endpoint, validates RS256
+signatures, issuer, audience, expiry, and a small clock-skew allowance. If
+these settings are omitted, local compatibility mode retains the existing
+development token handling; shared environments must set them and should not
+run in compatibility mode.
+
 Build the image from the StoreMesh workspace root so local service module
 replacements are available:
 
