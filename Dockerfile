@@ -2,6 +2,7 @@ FROM golang:1.26.6 AS build
 WORKDIR /src/storemesh-bff
 COPY storemesh-bff/go.mod storemesh-bff/go.sum ./
 COPY storemesh-bff/cmd ./cmd
+COPY storemesh-bff/internal ./internal
 COPY storemesh-order-service /src/storemesh-order-service
 COPY storemesh-product-service /src/storemesh-product-service
 COPY storemesh-inventory-service /src/storemesh-inventory-service

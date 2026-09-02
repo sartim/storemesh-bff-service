@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"storemesh-bff/internal/features"
 	orderv1 "storemesh-order-service/gen/storemesh/order/v1"
 	userv1 "storemesh-user-service/gen/user/v1"
 )
@@ -30,6 +31,7 @@ type server struct {
 	carts    orderv1.CartServiceClient
 	users    userv1.UserServiceClient
 	oidc     *oidcValidator
+	features *features.Flags
 }
 
 func main() {
@@ -44,15 +46,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("configure Keycloak OIDC: %v", err)
 	}
+	featureFlags, err := features.New(os.Getenv("FLAGSMITH_API_KEY"), os.Getenv("FLAGSMITH_BASE_URL"))
+	if err != nil {
+		log.Fatalf("configure feature flags: %v", err)
+	}
 	s := &server{
 		products: productv1.NewProductCatalogServiceClient(productConn),
 		orders:   orderv1.NewOrderServiceClient(orderConn),
 		carts:    orderv1.NewCartServiceClient(orderConn),
 		users:    userv1.NewUserServiceClient(userConn),
 		oidc:     oidc,
+		features: featureFlags,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.health)
+	mux.HandleFunc("/api/v1/config", s.clientConfig)
 	mux.HandleFunc("/api/v1/products", s.productsRoute)
 	mux.HandleFunc("/api/v1/graphql", s.authenticated(s.graphQL))
 	mux.HandleFunc("/api/v1/orders", s.authenticated(s.ordersRoute))
@@ -258,6 +266,20 @@ func (s *server) adminRoute(w http.ResponseWriter, r *http.Request) {
 func (s *server) health(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok"}`))
+}
+
+func (s *server) clientConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, map[string]any{"flags": s.features.ClientSafe(r.Context())})
+}
+
+func (s *server) writeJSON(w http.ResponseWriter, statusCode int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(value)
 }
 
 func (s *server) productsRoute(w http.ResponseWriter, r *http.Request) {

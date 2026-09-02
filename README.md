@@ -36,6 +36,7 @@ includes:
 - `GET /api/v1/cart?customer_id={id}`
 - `PUT /api/v1/cart?customer_id={id}`
 - `DELETE /api/v1/cart?customer_id={id}`
+- `GET /api/v1/config`
 
 GraphQL is available at `POST /api/v1/graphql` for authenticated client
 composition. The live schema supports `products`, `cart`, and `orders` reads,
@@ -80,6 +81,15 @@ views while continuing to use REST for login, health, uploads, and simple
 resource mutations.
 
 ## Keycloak validation
+
+## Runtime feature flags
+
+The BFF is the server-side feature-flag boundary. Set `FLAGSMITH_API_KEY` and,
+for self-hosted Flagsmith, `FLAGSMITH_BASE_URL` to enable OpenFeature
+evaluation through the Flagsmith provider. If the key is absent or a flag
+cannot be evaluated, typed safe defaults are used. `GET /api/v1/config` exposes
+only client-safe evaluated flags to web and mobile clients; it is not an
+authorization mechanism.
 
 Set both `KEYCLOAK_ISSUER` and `KEYCLOAK_AUDIENCE` to enable strict OIDC
 validation. The BFF discovers the realm JWKS endpoint, validates RS256
