@@ -61,7 +61,10 @@ jobs:
           context: .
           file: storemesh-bff/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ steps.version.outputs.image-tag }}
+          # Keep the runtime image name aligned with the Helm chart. The Git
+          # repository is named storemesh-bff-service, but the published image
+          # contract is ghcr.io/sartim/storemesh-bff.
+          tags: ghcr.io/sartim/storemesh-bff:${{ steps.version.outputs.image-tag }}
           provenance: mode=max
           sbom: true
 
