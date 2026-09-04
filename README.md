@@ -13,8 +13,8 @@ Docker and Kind are reserved for infrastructure and deployment validation.
 
 ```sh
 PRODUCT_SERVICE_ADDR=localhost:50051 \
-ORDER_SERVICE_ADDR=localhost:50052 \
-USER_SERVICE_ADDR=localhost:50053 \
+ORDER_SERVICE_ADDR=localhost:50053 \
+USER_SERVICE_ADDR=localhost:50054 \
 go run ./cmd/server
 ```
 
