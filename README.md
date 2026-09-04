@@ -74,9 +74,10 @@ product, inventory, and customer information. GraphQL resolvers must call the
 generated gRPC clients through application services; they must not duplicate
 domain rules or access another service's database.
 
-The GraphQL endpoint and schema will be introduced incrementally alongside
-the existing REST routes, keeping current clients compatible while allowing
-each client to request only the fields needed by a screen.
+The GraphQL endpoint and schema are maintained alongside the existing REST
+routes, keeping current clients compatible while allowing each client to
+request only the fields needed by a screen. The BFF CI contract test verifies
+the required commerce query and mutation fields remain available.
 
 The versioned composition contract is maintained at
 `api/graphql/schema.graphqls`. The live read resolvers are `products`, `cart`,

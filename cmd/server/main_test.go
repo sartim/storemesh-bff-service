@@ -19,6 +19,35 @@ func TestProductGraphQLSchema(t *testing.T) {
 	}
 }
 
+func TestGraphQLCommerceContract(t *testing.T) {
+	result := graphql.Do(graphql.Params{Schema: productGraphQLSchema, RequestString: `{ __schema { queryType { fields { name } } mutationType { fields { name args { name type { kind name ofType { kind name } } } } } } }`})
+	if len(result.Errors) != 0 {
+		t.Fatalf("schema introspection returned errors: %v", result.Errors)
+	}
+	data := result.Data.(map[string]interface{})["__schema"].(map[string]interface{})
+	queryNames := fieldNames(data["queryType"].(map[string]interface{})["fields"])
+	for _, name := range []string{"products", "cart", "orders"} {
+		if !queryNames[name] {
+			t.Fatalf("query field %q is missing", name)
+		}
+	}
+	mutationNames := fieldNames(data["mutationType"].(map[string]interface{})["fields"])
+	for _, name := range []string{"updateCart", "clearCart", "createOrder"} {
+		if !mutationNames[name] {
+			t.Fatalf("mutation field %q is missing", name)
+		}
+	}
+}
+
+func fieldNames(value interface{}) map[string]bool {
+	names := map[string]bool{}
+	for _, item := range value.([]interface{}) {
+		name := item.(map[string]interface{})["name"].(string)
+		names[name] = true
+	}
+	return names
+}
+
 func TestGraphQLRejectsInvalidRequest(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest("POST", "/api/v1/graphql", strings.NewReader("not-json"))
