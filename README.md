@@ -8,8 +8,8 @@ and mobile clients never call internal gRPC services directly.
 ## Local run
 
 Requires Go 1.26.6 or newer. Start the domain services as local processes with
-unique gRPC ports, or point these addresses at targeted port-forwards for
-dependencies still running in Kind:
+unique gRPC ports. This is the recommended application-development workflow;
+Docker and Kind are reserved for infrastructure and deployment validation.
 
 ```sh
 PRODUCT_SERVICE_ADDR=localhost:50051 \
@@ -22,7 +22,8 @@ The BFF listens on `HTTP_ADDR` (default `:8080`). For a different local port,
 set `HTTP_ADDR=:8081`. The frontend should call this BFF address; it should
 not call the internal gRPC services directly.
 
-Defaults target the Kubernetes Service DNS names. The initial milestone
+Defaults target the Kubernetes Service DNS names when deployed. For local
+process development, set the service addresses as shown above. The initial milestone
 includes:
 
 - `GET /healthz`
