@@ -90,6 +90,12 @@ idempotency key. Web and mobile clients may consume GraphQL for these composed
 views while continuing to use REST for login, health, uploads, and simple
 resource mutations.
 
+Canonical v1 response fixtures for client contract tests are maintained under
+`api/graphql/fixtures/v1/` (`catalog.json`, `cart.json`, and `order.json`). The
+BFF repository owns these shapes; Android, iOS, and web tests should keep their
+local golden copies aligned with this directory rather than inventing client-
+specific response formats.
+
 ## Keycloak validation
 
 ## Runtime feature flags

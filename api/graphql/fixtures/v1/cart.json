@@ -1,0 +1,10 @@
+{
+  "data": {
+    "cart": {
+      "customerId": "customer-1",
+      "lines": [
+        { "productId": "p-1", "quantity": 2 }
+      ]
+    }
+  }
+}

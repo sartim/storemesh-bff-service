@@ -1,0 +1,18 @@
+{
+  "data": {
+    "products": {
+      "products": [
+        {
+          "id": "p-1",
+          "sku": "SM-LAMP-001",
+          "name": "Halo desk lamp",
+          "description": "Warm light",
+          "priceMinor": 1299,
+          "currency": "USD",
+          "status": "ACTIVE"
+        }
+      ],
+      "nextPageToken": ""
+    }
+  }
+}

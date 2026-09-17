@@ -2,7 +2,10 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -36,6 +39,27 @@ func TestGraphQLCommerceContract(t *testing.T) {
 		if !mutationNames[name] {
 			t.Fatalf("mutation field %q is missing", name)
 		}
+	}
+}
+
+func TestVersionedGraphQLFixturesAreValid(t *testing.T) {
+	for _, name := range []string{"catalog.json", "cart.json", "order.json"} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join("..", "..", "api", "graphql", "fixtures", "v1", name)
+			payload, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read fixture: %v", err)
+			}
+			var response struct {
+				Data map[string]json.RawMessage `json:"data"`
+			}
+			if err := json.Unmarshal(payload, &response); err != nil {
+				t.Fatalf("fixture is not valid JSON: %v", err)
+			}
+			if len(response.Data) != 1 {
+				t.Fatalf("fixture data keys = %d, want 1", len(response.Data))
+			}
+		})
 	}
 }
 
