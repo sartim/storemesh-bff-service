@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -78,6 +80,37 @@ func TestGraphQLRejectsInvalidRequest(t *testing.T) {
 	(&server{}).graphQL(recorder, request)
 	if recorder.Code != 400 {
 		t.Fatalf("status = %d, want 400", recorder.Code)
+	}
+}
+
+func TestGraphQLRouteRejectsMissingBearerToken(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/graphql", strings.NewReader(`{"query":"{ cart { customerId } }"}`))
+	s := &server{}
+	s.authenticated(s.graphQL)(recorder, request)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestGraphQLProtectedResolverRequiresCustomerSubject(t *testing.T) {
+	result := graphql.Do(graphql.Params{
+		Schema:        productGraphQLSchema,
+		RequestString: `{ cart { customerId } }`,
+		Context:       context.WithValue(context.Background(), graphQLServerKey{}, &server{}),
+	})
+	if len(result.Errors) != 1 || !strings.Contains(result.Errors[0].Message, "customer subject is required") {
+		t.Fatalf("unexpected authorization errors: %v", result.Errors)
+	}
+}
+
+func TestGraphQLCreateOrderRequiresIdempotencyKey(t *testing.T) {
+	result := graphql.Do(graphql.Params{
+		Schema:        productGraphQLSchema,
+		RequestString: `mutation { createOrder(lines: [{ productId: "p-1", quantity: 1 }]) { id } }`,
+	})
+	if len(result.Errors) == 0 || !strings.Contains(result.Errors[0].Message, "idempotencyKey") {
+		t.Fatalf("expected idempotencyKey validation error, got: %v", result.Errors)
 	}
 }
 
