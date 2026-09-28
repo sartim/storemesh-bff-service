@@ -142,8 +142,8 @@ func (s *server) userRoute(w http.ResponseWriter, r *http.Request) {
 // namespace. User Service remains the authorization authority and receives
 // the original bearer token through grpcContext.
 func (s *server) adminRoute(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") == "" {
-		writeError(w, status.Error(codes.Unauthenticated, "authorization is required"))
+	if err := s.requireAdmin(r); err != nil {
+		writeError(w, err)
 		return
 	}
 
@@ -261,6 +261,37 @@ func (s *server) adminRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
+func (s *server) requireAdmin(r *http.Request) error {
+	header := r.Header.Get("Authorization")
+	if header == "" {
+		return status.Error(codes.Unauthenticated, "authorization is required")
+	}
+	raw := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+	if raw == "" || raw == header {
+		return status.Error(codes.Unauthenticated, "bearer authorization is required")
+	}
+	var roles []string
+	if s.oidc != nil {
+		claims, err := s.oidc.Validate(raw)
+		if err != nil {
+			return status.Error(codes.Unauthenticated, "invalid access token")
+		}
+		roles = claims.Roles
+		roles = append(roles, claims.RealmAccess.Roles...)
+		for _, access := range claims.ResourceAccess {
+			roles = append(roles, access.Roles...)
+		}
+	} else {
+		roles = bearerRoles(header)
+	}
+	for _, role := range roles {
+		if strings.EqualFold(strings.TrimSpace(role), "admin") {
+			return nil
+		}
+	}
+	return status.Error(codes.PermissionDenied, "admin role is required")
 }
 
 func (s *server) health(w http.ResponseWriter, _ *http.Request) {
@@ -425,6 +456,27 @@ func bearerSubject(header string) string {
 		return ""
 	}
 	return claims.Subject
+}
+
+func bearerRoles(header string) []string {
+	parts := strings.Split(strings.TrimPrefix(header, "Bearer "), ".")
+	if len(parts) != 3 {
+		return nil
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil
+	}
+	var claims struct {
+		Roles       []string `json:"roles"`
+		RealmAccess struct {
+			Roles []string `json:"roles"`
+		} `json:"realm_access"`
+	}
+	if json.Unmarshal(payload, &claims) != nil {
+		return nil
+	}
+	return append(claims.Roles, claims.RealmAccess.Roles...)
 }
 
 func (s *server) write(w http.ResponseWriter, message proto.Message, err error) {

@@ -52,8 +52,10 @@ composition. The live schema supports `products`, `cart`, and `orders` reads,
 plus `updateCart`, `clearCart`, and idempotent `createOrder` mutations.
 
 Incoming `Authorization` is forwarded as gRPC metadata. Login and refresh are
-delegated to User Service. Admin routes require an Authorization header at the
-edge and User Service performs the final token and admin-role authorization.
+delegated to User Service. Admin routes require a verified `admin` role at the
+BFF edge when Keycloak OIDC is enabled; local compatibility tokens may carry
+the same role claim only in isolated development. User Service remains the
+domain authorization authority for user-management operations.
 Order listing supports customer and status filters with page-token pagination;
 the caller is responsible for selecting an authorized customer scope until
 the order authorization interceptor is introduced.

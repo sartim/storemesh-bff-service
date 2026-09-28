@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/graphql-go/graphql"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestProductGraphQLSchema(t *testing.T) {
@@ -142,5 +144,23 @@ func TestBearerSubject(t *testing.T) {
 	}
 	if got := bearerSubject("Bearer invalid"); got != "" {
 		t.Fatalf("invalid token subject = %q", got)
+	}
+}
+
+func TestRequireAdminRejectsCustomerToken(t *testing.T) {
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"customer-123","roles":["customer"]}`))
+	s := &server{}
+	request := httptest.NewRequest("GET", "/api/v1/admin/users", nil)
+	request.Header.Set("Authorization", "Bearer header."+payload+".signature")
+	if status.Code(s.requireAdmin(request)) != codes.PermissionDenied {
+		t.Fatalf("customer token was not denied")
+	}
+}
+
+func TestBearerRolesReadsKeycloakRealmRoles(t *testing.T) {
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"realm_access":{"roles":["admin"]}}`))
+	roles := bearerRoles("Bearer header." + payload + ".signature")
+	if len(roles) != 1 || roles[0] != "admin" {
+		t.Fatalf("roles = %#v, want admin", roles)
 	}
 }

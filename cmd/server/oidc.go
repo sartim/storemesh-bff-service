@@ -19,6 +19,16 @@ type oidcValidator struct {
 	keys                      map[string]*rsa.PublicKey
 	mu                        sync.RWMutex
 }
+type oidcClaims struct {
+	jwt.RegisteredClaims
+	Roles       []string `json:"roles,omitempty"`
+	RealmAccess struct {
+		Roles []string `json:"roles"`
+	} `json:"realm_access,omitempty"`
+	ResourceAccess map[string]struct {
+		Roles []string `json:"roles"`
+	} `json:"resource_access,omitempty"`
+}
 type oidcDiscovery struct {
 	JWKSURL string `json:"jwks_uri"`
 }
@@ -74,8 +84,8 @@ func (v *oidcValidator) refresh() error {
 	v.mu.Unlock()
 	return nil
 }
-func (v *oidcValidator) Validate(raw string) (*jwt.RegisteredClaims, error) {
-	token, err := jwt.ParseWithClaims(raw, &jwt.RegisteredClaims{}, func(token *jwt.Token) (any, error) {
+func (v *oidcValidator) Validate(raw string) (*oidcClaims, error) {
+	token, err := jwt.ParseWithClaims(raw, &oidcClaims{}, func(token *jwt.Token) (any, error) {
 		if token.Method != jwt.SigningMethodRS256 {
 			return nil, fmt.Errorf("unexpected signing method")
 		}
@@ -91,7 +101,7 @@ func (v *oidcValidator) Validate(raw string) (*jwt.RegisteredClaims, error) {
 	if err != nil {
 		return nil, err
 	}
-	claims, ok := token.Claims.(*jwt.RegisteredClaims)
+	claims, ok := token.Claims.(*oidcClaims)
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid token")
 	}
