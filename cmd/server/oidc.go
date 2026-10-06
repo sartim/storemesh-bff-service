@@ -18,6 +18,8 @@ type oidcValidator struct {
 	issuer, audience, jwksURL string
 	keys                      map[string]*rsa.PublicKey
 	mu                        sync.RWMutex
+	refreshMu                 sync.Mutex
+	lastUnknownRefresh        time.Time
 }
 type oidcClaims struct {
 	jwt.RegisteredClaims
@@ -30,6 +32,7 @@ type oidcClaims struct {
 	} `json:"resource_access,omitempty"`
 }
 type oidcDiscovery struct {
+	Issuer  string `json:"issuer"`
 	JWKSURL string `json:"jwks_uri"`
 }
 type oidcJWKS struct {
@@ -45,17 +48,35 @@ func newOIDCValidator(issuer, audience string) (*oidcValidator, error) {
 	if issuer == "" || audience == "" {
 		return nil, nil
 	}
+	issuer = strings.TrimRight(issuer, "/")
 	var discovery oidcDiscovery
-	if err := getJSON(strings.TrimRight(issuer, "/")+"/.well-known/openid-configuration", &discovery); err != nil {
+	if err := getJSON(issuer+"/.well-known/openid-configuration", &discovery); err != nil {
 		return nil, err
 	}
-	v := &oidcValidator{issuer: strings.TrimRight(issuer, "/"), audience: audience, jwksURL: discovery.JWKSURL}
+	if strings.TrimRight(discovery.Issuer, "/") != issuer || discovery.JWKSURL == "" {
+		return nil, fmt.Errorf("OIDC discovery issuer or JWKS URI does not match configuration")
+	}
+	v := &oidcValidator{issuer: issuer, audience: audience, jwksURL: discovery.JWKSURL}
 	if err := v.refresh(); err != nil {
 		return nil, err
 	}
 	return v, nil
 }
 func (v *oidcValidator) refresh() error {
+	v.refreshMu.Lock()
+	defer v.refreshMu.Unlock()
+	return v.loadKeys()
+}
+func (v *oidcValidator) refreshForUnknownKey() error {
+	v.refreshMu.Lock()
+	defer v.refreshMu.Unlock()
+	if time.Since(v.lastUnknownRefresh) < 5*time.Second {
+		return nil
+	}
+	v.lastUnknownRefresh = time.Now()
+	return v.loadKeys()
+}
+func (v *oidcValidator) loadKeys() error {
 	var set oidcJWKS
 	if err := getJSON(v.jwksURL, &set); err != nil {
 		return err
@@ -94,7 +115,15 @@ func (v *oidcValidator) Validate(raw string) (*oidcClaims, error) {
 		key := v.keys[kid]
 		v.mu.RUnlock()
 		if key == nil {
-			return nil, fmt.Errorf("unknown signing key")
+			if err := v.refreshForUnknownKey(); err != nil {
+				return nil, fmt.Errorf("refresh OIDC signing keys: %w", err)
+			}
+			v.mu.RLock()
+			key = v.keys[kid]
+			v.mu.RUnlock()
+			if key == nil {
+				return nil, fmt.Errorf("unknown signing key")
+			}
 		}
 		return key, nil
 	}, jwt.WithIssuer(v.issuer), jwt.WithAudience(v.audience), jwt.WithLeeway(30*time.Second))
@@ -108,7 +137,8 @@ func (v *oidcValidator) Validate(raw string) (*oidcClaims, error) {
 	return claims, nil
 }
 func getJSON(url string, target any) error {
-	response, err := http.Get(url)
+	client := &http.Client{Timeout: 5 * time.Second}
+	response, err := client.Get(url)
 	if err != nil {
 		return err
 	}
