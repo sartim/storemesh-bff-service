@@ -31,6 +31,20 @@ jobs:
         with:
           repository: sartim/storemesh-user-service
           path: storemesh-user-service
+      - uses: actions/checkout@v4
+        with:
+          repository: sartim/storemesh-frontend
+          path: storemesh-frontend
+      - uses: actions/checkout@v4
+        with:
+          repository: sartim/storemesh-android
+          path: storemesh-android
+      - uses: actions/checkout@v4
+        with:
+          repository: sartim/storemesh-ios
+          path: storemesh-ios
+      - name: Validate GraphQL fixture parity across clients
+        run: python3 storemesh-bff/scripts/validate-client-fixtures.py .
       - uses: actions/setup-go@v5
         with:
           go-version-file: storemesh-bff/go.mod
