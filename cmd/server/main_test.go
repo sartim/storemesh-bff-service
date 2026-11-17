@@ -116,6 +116,17 @@ func TestGraphQLCreateOrderRequiresIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestGraphQLCreateOrderRequiresCustomerSubject(t *testing.T) {
+	result := graphql.Do(graphql.Params{
+		Schema:        productGraphQLSchema,
+		RequestString: `mutation { createOrder(lines: [{ productId: "p-1", quantity: 1 }], idempotencyKey: "request-1") { id } }`,
+		Context:       context.WithValue(context.Background(), graphQLServerKey{}, &server{}),
+	})
+	if len(result.Errors) == 0 || !strings.Contains(result.Errors[0].Message, "customer subject is required") {
+		t.Fatalf("expected customer subject authorization error, got: %v", result.Errors)
+	}
+}
+
 func TestPathID(t *testing.T) {
 	tests := []struct {
 		name   string
