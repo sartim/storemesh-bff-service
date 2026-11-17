@@ -96,7 +96,15 @@ Canonical v1 response fixtures for client contract tests are maintained under
 `api/graphql/fixtures/v1/` (`catalog.json`, `cart.json`, and `order.json`). The
 BFF repository owns these shapes; Android, iOS, and web tests should keep their
 local golden copies aligned with this directory rather than inventing client-
-specific response formats.
+The BFF CI checks the fixture copies in all three clients for semantic JSON
+parity. Run the same check from a workspace containing the four sibling repos:
+
+```sh
+python3 storemesh-bff/scripts/validate-client-fixtures.py .
+```
+
+When adding or changing a fixture, update the BFF canonical response and each
+client's corresponding test fixture in the same change set.
 
 ## Keycloak validation
 
