@@ -39,10 +39,32 @@ func TestGraphQLCommerceContract(t *testing.T) {
 		}
 	}
 	mutationNames := fieldNames(data["mutationType"].(map[string]interface{})["fields"])
-	for _, name := range []string{"updateCart", "clearCart", "createOrder"} {
+	for _, name := range []string{"updateCart", "clearCart", "createOrder", "cancelOrder"} {
 		if !mutationNames[name] {
 			t.Fatalf("mutation field %q is missing", name)
 		}
+	}
+}
+
+func TestGraphQLCancelOrderRequiresCustomerSubject(t *testing.T) {
+	result := graphql.Do(graphql.Params{
+		Schema:        productGraphQLSchema,
+		RequestString: `mutation { cancelOrder(orderId: "order-1") { id } }`,
+		Context:       context.WithValue(context.Background(), graphQLServerKey{}, &server{}),
+	})
+	if len(result.Errors) == 0 || !strings.Contains(result.Errors[0].Message, "customer subject is required") {
+		t.Fatalf("expected customer subject authorization error, got: %v", result.Errors)
+	}
+}
+
+func TestGraphQLCancelOrderRequiresOrderID(t *testing.T) {
+	result := graphql.Do(graphql.Params{
+		Schema:        productGraphQLSchema,
+		RequestString: `mutation { cancelOrder(orderId: "") { id } }`,
+		Context:       context.WithValue(context.Background(), graphQLServerKey{}, &server{}),
+	})
+	if len(result.Errors) == 0 || !strings.Contains(result.Errors[0].Message, "orderId is required") {
+		t.Fatalf("expected order ID validation error, got: %v", result.Errors)
 	}
 }
 
