@@ -103,6 +103,9 @@ func buildProductGraphQLSchema() graphql.Schema {
 		"createOrder": {Type: orderType, Args: graphql.FieldConfigArgument{
 			"lines": {Type: graphql.NewNonNull(graphql.NewList(graphql.NewNonNull(orderLineInputType)))}, "idempotencyKey": {Type: graphql.NewNonNull(graphql.String)},
 		}, Resolve: resolveCreateOrder},
+		"cancelOrder": {Type: orderType, Args: graphql.FieldConfigArgument{
+			"orderId": {Type: graphql.NewNonNull(graphql.ID)},
+		}, Resolve: resolveCancelOrder},
 	}})
 	schema, err := graphql.NewSchema(graphql.SchemaConfig{Query: root, Mutation: mutation})
 	if err != nil {
@@ -213,10 +216,37 @@ func resolveCreateOrder(params graphql.ResolveParams) (interface{}, error) {
 
 func resolveClearCart(params graphql.ResolveParams) (interface{}, error) {
 	s, customerID, err := graphQLAuth(params)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	response, err := s.carts.ClearCart(params.Context, &orderv1.ClearCartRequest{CustomerId: customerID})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	return graphQLCart(response.GetCart()), nil
+}
+
+func resolveCancelOrder(params graphql.ResolveParams) (interface{}, error) {
+	orderID := stringArgument(params.Args, "orderId")
+	if orderID == "" {
+		return nil, status.Error(codes.InvalidArgument, "orderId is required")
+	}
+	s, customerID, err := graphQLAuth(params)
+	if err != nil {
+		return nil, err
+	}
+	response, err := s.orders.CancelOrder(params.Context, &orderv1.CancelOrderRequest{OrderId: orderID})
+	if err != nil {
+		return nil, err
+	}
+	order := response.GetOrder()
+	if order == nil {
+		return nil, status.Error(codes.Internal, "order service returned an empty cancellation result")
+	}
+	if order.GetCustomerId() != customerID {
+		return nil, status.Error(codes.PermissionDenied, "order is not owned by the authenticated customer")
+	}
+	return graphQLOrder(order), nil
 }
 
 func graphQLCartLines(value interface{}) ([]*orderv1.CartLine, error) {

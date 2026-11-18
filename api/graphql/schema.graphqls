@@ -17,6 +17,8 @@ type Mutation {
   clearCart: Cart!
   """Create an order from the authenticated customer's cart lines."""
   createOrder(lines: [OrderLineInput!]!, idempotencyKey: String!): Order!
+  """Cancel an order owned by the authenticated customer."""
+  cancelOrder(orderId: ID!): Order!
 }
 
 type ProductConnection {
